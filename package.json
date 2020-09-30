@@ -1,0 +1,20 @@
+{
+  "name": "rcon-server",
+  "version": "0.1.0",
+  "description": "RCON Server for nodejs",
+  "main": "index.js",
+  "scripts": {
+    "test": "node ./src/example.js"
+  },
+  "keywords": [
+    "rcon",
+    "server",
+    "minecraft",
+    "mcje",
+    "mc",
+    "mcpe",
+    "mcbe"
+  ],
+  "author": "Kıraç Armağan Önal",
+  "license": "MIT"
+}

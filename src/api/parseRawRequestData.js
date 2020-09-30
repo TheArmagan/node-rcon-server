@@ -3,7 +3,7 @@
 /**
  * @param {Buffer} data 
  */
-function parseClientResponse(data) {
+function parseRawRequestData(data) {
     let result = {
         size: data.readInt32LE(0),
         id: data.readInt32LE(4),
@@ -14,4 +14,4 @@ function parseClientResponse(data) {
     return result;
 }
 
-module.exports = {parseClientResponse};
+module.exports = parseRawRequestData;
