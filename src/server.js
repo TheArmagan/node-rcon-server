@@ -29,48 +29,74 @@ class RCONServer extends EventEmitter {
     /** @type {string} */
     #password
 
-    /** @type {net.Socket|null} if its set this is means socket connected */
-    #connectedSocket = null
+    /** @type {number} */
+    #clientLimit
 
-    constructor({ port = 19132, host = "127.0.0.1", password = "password" }) {
+    /** @type {boolean} */
+    #destroySocketOnLimitExceeded
+
+    /** @type {boolean} */
+    #emitAdvancedEvents
+
+    /** @type {Set<net.Socket>} */
+    #connectedSockets = new Set()
+
+    constructor({ 
+        port = 3839, 
+        host = "127.0.0.1", 
+        password = "password", 
+        clientLimit = 1, 
+        destroySocketOnLimitExceeded = true, 
+        emitAdvancedEvents = false
+    }) {
         super();
         this.#port = port;
         this.#host = host;
         this.#password = password;
+        this.#clientLimit = clientLimit;
+        this.#destroySocketOnLimitExceeded = destroySocketOnLimitExceeded;
+        this.#emitAdvancedEvents = emitAdvancedEvents;
     }
 
     connect() {
+
         this.#server = net.createServer((socket) => {
 
-            this.emit("socketConnectTry", {socket});
+            if (this.#emitAdvancedEvents) this.emit("beforeSocketConnection", {socket});
 
-            if (this.#connectedSocket != null) {
-                this.emit("socketConnectError", {socket, error: "alreadyConnected"});
+            if (this.#connectedSockets.size >= this.#clientLimit) {
+                if (this.#emitAdvancedEvents) this.emit("socketConnectionError", {socket, error: "connectionLimitExceeded"});
+                if (!socket.destroyed) {
+                    socket.end("connectionLimitExceeded")
+                    if (this.#destroySocketOnLimitExceeded) socket.destroy();
+                }
                 return;
             }
 
             const sw = new SocketWriter(socket);
 
-            this.emit("socketConnected", {socket});
+            if (this.#emitAdvancedEvents) this.emit("socketConnected", {socket});
 
             socket.on("data", (rawData) => {
                 const data = parseRawRequestData(rawData);
-                this.emit("socketData", {rawData, data})
+                if (this.#emitAdvancedEvents) this.emit("socketData", {rawData, data})
 
                 if (data.type == CLIENT_AUTH_REQUEST) {
                     if (data.body == this.#password) {
+                        if (this.#emitAdvancedEvents) this.emit("beforeLogin", {socket, id: data.id, password: data.body})
                         sw.socketWrite({
                             id: data.id,
                             type: CLIENT_AUTH_SUCCESS
                         })
-                        this.#connectedSocket = socket;
-                        this.emit("login", {id: data.id, password: data.body, successful: true})
+                        this.#connectedSockets.add(socket);
+                        this.emit("login", {socket, id: data.id, password: data.body, successful: true})
+
                     } else {
                         sw.socketWrite({
                             id: data.id,
                             type: CLIENT_AUTH_ERROR
                         })
-                        this.emit("login", {id: data.id, password: data.body, successful: false})
+                        this.emit("login", {socket, id: data.id, password: data.body, successful: false})
                     }
                 } else if (data.type == CLIENT_COMMAND_REQUEST) {
                     let resData = {...data};
@@ -87,29 +113,29 @@ class RCONServer extends EventEmitter {
             })
 
             socket.on("error", () => {
-                this.emit("socketError", {socket})
+                if (this.#emitAdvancedEvents) this.emit("socketError", {socket})
             });
             socket.on("end", () => {
-                this.emit("socketEnd", {socket, end: true})
+                if (this.#emitAdvancedEvents) this.emit("socketEnd", {socket, end: true})
             });
             socket.on("close", (hadError) => {
-                this.emit("socketClose", {socket, hadError})
-                this.#connectedSocket = null;
+                if (this.#emitAdvancedEvents) this.emit("socketClose", {socket, hadError})
+                this.#connectedSockets.delete(socket);
             });
         })
 
         this.#server.listen(this.#port, this.#host, () => {
-            this.emit("listening", this.getServerInfo());
+            this.emit("listening", this.getServerSettings());
         })
 
         this.#server.on("error", (error)=>{
-            this.emit("serverError", {error})
+            if (this.#emitAdvancedEvents) this.emit("serverError", {error})
         })
     }
 
-    /** @returns {net.Socket|null} if its set this is means socket connected */
-    getConnectedSocket() {
-        return this.#connectedSocket;
+    /** @returns {Set<net.Socket>} if its set this is means socket connected */
+    getConnectedSockets() {
+        return this.#connectedSockets;
     }
 
     /** @returns {net.Server} */
@@ -117,8 +143,15 @@ class RCONServer extends EventEmitter {
         return this.#server;
     }
 
-    getServerInfo() {
-        return { port: this.#port, host: this.#host, password: this.#password }
+    getServerSettings() {
+        return { 
+            port: this.#port, 
+            host: this.#host, 
+            password: this.#password, 
+            clientLimit: this.#clientLimit, 
+            destroySocketOnLimitExceeded: this.#destroySocketOnLimitExceeded,
+            emitAdvancedEvents: this.#emitAdvancedEvents
+        }
     }
 
 }

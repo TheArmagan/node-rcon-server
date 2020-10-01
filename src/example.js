@@ -3,9 +3,12 @@ const {RCONServer} = require("./server");
 process.title = "RCON Server";
 
 const server = new RCONServer({
-    port: 19132, 
-    host: "127.0.0.1",
-    password: "password"
+    port: 3839, // default to 3839
+    host: "127.0.0.1", // default to 127.0.0.1
+    password: "password", // default to password
+    clientLimit: 1, // default to 1
+    destroySocketOnLimitExceeded: true, // default to true
+    emitAdvancedEvents: false // default to false
 });
 
 server.connect();

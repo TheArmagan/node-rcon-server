@@ -1,1 +1,2 @@
-module.exports = require("./src/server");
+const {RCONServer} =  require("./src/server");
+module.exports = {RCONServer};
